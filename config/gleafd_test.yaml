@@ -1,0 +1,12 @@
+gleafd:
+  name: "gleafd"
+  addr: "127.0.0.1:9060"
+  segment:
+    enable: true
+    db_host: "127.0.0.1:5506"
+    db_name: "gleafd"
+    db_user: "roota"
+    db_pass: "123456"
+  snowflake:
+    enable: true
+    redis_addr: "localhost:8379"
