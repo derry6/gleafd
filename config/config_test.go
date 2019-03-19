@@ -3,8 +3,6 @@ package config
 import (
 	"os"
 	"testing"
-
-	"github.com/derry6/gleafd/server"
 )
 
 func b2s(v bool) string {
@@ -14,8 +12,8 @@ func b2s(v bool) string {
 	return "false"
 }
 
-func getTestOptions() *server.Options {
-	wantOpts := server.NewOptions()
+func getTestConfig() *Config {
+	wantOpts := newConfig()
 	wantOpts.Name = "gleafd"
 	wantOpts.Addr = "localhost:7890"
 	wantOpts.Segment.Enable = false
@@ -24,60 +22,58 @@ func getTestOptions() *server.Options {
 	wantOpts.Segment.DBUser = "gleafd"
 	wantOpts.Segment.DBPass = "12454656"
 	wantOpts.Snowflake.Enable = false
-	wantOpts.Snowflake.ZkAddress = "www.gleafd.com:2191"
+	wantOpts.Snowflake.RedisAddresss = "localhost:8379"
 	return wantOpts
 }
 
 func TestParseArgs(t *testing.T) {
-	wantOpts := getTestOptions()
+	wantCfg := getTestConfig()
 	args := []string{
-		"name=" + wantOpts.Name,
-		"addr=" + wantOpts.Addr,
-		"--segment-enable=" + b2s(wantOpts.Segment.Enable),
-		"--segment-db-host=" + wantOpts.Segment.DBHost,
-		"--segment-db-user=" + wantOpts.Segment.DBUser,
-		"--segment-db-pass=" + wantOpts.Segment.DBPass,
-		"--segment-db-name=" + wantOpts.Segment.DBName,
-		"--snowflake-enable=" + b2s(wantOpts.Snowflake.Enable),
-		"--snowflake-zk-addr=" + wantOpts.Snowflake.ZkAddress,
+		"--name=" + wantCfg.Name,
+		"--addr=" + wantCfg.Addr,
+		"--segment-enable=" + b2s(wantCfg.Segment.Enable),
+		"--segment-db-host=" + wantCfg.Segment.DBHost,
+		"--segment-db-user=" + wantCfg.Segment.DBUser,
+		"--segment-db-pass=" + wantCfg.Segment.DBPass,
+		"--segment-db-name=" + wantCfg.Segment.DBName,
+		"--snowflake-enable=" + b2s(wantCfg.Snowflake.Enable),
+		"--snowflake-redis-addr=" + wantCfg.Snowflake.RedisAddresss,
 	}
-	cfg := New()
-	if err := cfg.Parse(args); err != nil {
+	cfg, err := Load(args)
+	if err != nil {
 		t.Fatal(err)
 	}
-	opts := cfg.Options()
-	if *opts != *wantOpts {
-		t.Fatalf("opts = %v, want = %v", opts, wantOpts)
+	if *cfg != *wantCfg {
+		t.Fatalf("cfg = %v, want = %v", cfg, wantCfg)
 	}
 }
 
 func TestParseArgsWithEnv(t *testing.T) {
-	cliOpts := getTestOptions()
+	cliOpts := getTestConfig()
 	args := []string{
-		// "name=" + cliOpts.Name,
-		"addr=" + cliOpts.Addr,
+		// "--name=" + cliOpts.Name,
+		"--addr=" + cliOpts.Addr,
 		"--segment-enable=" + b2s(cliOpts.Segment.Enable),
 		"--segment-db-host=" + cliOpts.Segment.DBHost,
 		"--segment-db-user=" + cliOpts.Segment.DBUser,
 		"--segment-db-pass=" + cliOpts.Segment.DBPass,
 		"--segment-db-name=" + cliOpts.Segment.DBName,
 		// "--snowflake-enable=" + b2s(cliOpts.Snowflake.Enable),
-		"--snowflake-zk-addr=" + cliOpts.Snowflake.ZkAddress,
+		"--snowflake-redis-addr=" + cliOpts.Snowflake.RedisAddresss,
 	}
-	envOpts := server.NewOptions()
+	envOpts := newConfig()
 	envOpts.Name = "myGleafd"
 	envOpts.Addr = "fromenv:1239"
 	envOpts.Segment.DBName = "dbnamefromenv"
 
-	os.Setenv("GLEAFD_SERVER_NAME", envOpts.Name)
-	os.Setenv("GLEAFD_SERVER_ADDR", envOpts.Addr)
+	os.Setenv("GLEAFD_NAME", envOpts.Name)
+	os.Setenv("GLEAFD_ADDR", envOpts.Addr)
 	os.Setenv("GLEAFD_SEGMENT_DB_NAME", envOpts.Segment.DBName)
 
-	cfg := New()
-	if err := cfg.Parse(args); err != nil {
+	parsedOpts, err := Load(args)
+	if err != nil {
 		t.Fatal(err)
 	}
-	parsedOpts := cfg.Options()
 	// 命令行参数不存在，则使用环境变量
 	if parsedOpts.Name != envOpts.Name {
 		t.Fatalf("name = %v, want = %v", parsedOpts.Name, envOpts.Name)
@@ -93,27 +89,20 @@ func TestParseArgsWithEnv(t *testing.T) {
 
 func TestParseFromFile(t *testing.T) {
 	// TODO:
-	cliZkAddr := "abc.com:8490"
+	cliRedisAddr := "abc.com:8490"
 	args := []string{
 		"--config=gleafd_test.yaml",
-		"--snowflake-zk-addr=" + cliZkAddr,
+		"--snowflake-redis-addr=" + cliRedisAddr,
 	}
 	envName := "myGleafd"
-	os.Setenv("GLEAFD_SERVER_NAME", envName)
+	os.Setenv("GLEAFD_NAME", envName)
 
-	cfg := New()
-	if err := cfg.Parse(args); err != nil {
+	opts, err := Load(args)
+	if err != nil {
 		t.Fatal(err)
 	}
 	// 所有配置从配置文件中读取
-	opts := cfg.Options()
-	if opts.Addr != "123.345.980.123:9091" {
-		t.Fatalf("addr = %v, want = 123.345.980.123:9091", opts.Addr)
-	}
 	if opts.Name != "gleafd" {
 		t.Fatalf("name = %v, want = gleafd", opts.Name)
-	}
-	if opts.Snowflake.ZkAddress != "www.gleafd.com:2181" {
-		t.Fatalf("zkAddr = %v, want = %v", opts.Snowflake.ZkAddress, "www.gleafd.com:2181")
 	}
 }
