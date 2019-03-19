@@ -154,11 +154,17 @@ func (s *Service) update(ws waitItem) error {
 	ctx := context.Background()
 	if ws.step <= 0 {
 		seg, err = s.repo.UpdateMaxID(ctx, ws.biztag)
+		if err != nil {
+			return err 
+		}
+		// use default step 
 	} else {
 		seg, err = s.repo.UpdateMaxIDWithStep(ctx, ws.biztag, ws.step)
-	}
-	if err != nil {
-		return err
+		if err != nil {
+			return err 
+		}
+		// move to UpdateMaxIDWithStep ?
+		seg.Step  = ws.step
 	}
 	// 如果usc被关闭？
 	select {

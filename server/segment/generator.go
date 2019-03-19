@@ -14,8 +14,10 @@ type generator struct {
 	closed     int32
 	inited     int32
 	closeC     chan struct{}
+	minStep    int32
 	curStep    int32
 	lastUpdate time.Time
+	total      int64
 }
 
 func newGenerator(svc *Service, biztag string, waits chan *Segment) *generator {
@@ -49,26 +51,22 @@ func (g *generator) get(ctx context.Context) (int64, error) {
 }
 
 func (g *generator) buildOneSegment(seg *Segment) {
-	if seg == nil || seg.BizTag == "" {
-		return
+	if g.minStep == 0 {
+		g.minStep = seg.Step
 	}
-	if seg.MaxID <= 0 || seg.Step <= 0 {
-		return
-	}
-	min := seg.MaxID - int64(seg.Step)
-	max := seg.MaxID
-	mid := int64(float64(seg.Step)*0.65 + float64(min))
-	for i := min; i < max; i++ {
-		if i == mid { // 使用超过65%时，通知updater获取新号段
+	start := seg.MaxID - int64(seg.Step)
+	end := seg.MaxID
+	pct75 := int64(float64(seg.Step)*0.75 + float64(start))
+
+	for i := start; i < end; i++ {
+		if i == pct75 { // 使用超过65%时，通知updater获取新号段
 			now := time.Now()
 			duration := now.Sub(g.lastUpdate)
-			// fmt.Printf("Update %s with step = %d, duration = %s\n", g.biztag, g.curStep, duration)
+			g.svc.logger.Infow("Updating", "biztag", g.biztag,
+				"start", start, "end", end, "pct75", pct75, "step", g.curStep, "duration", duration)
 			if duration <= 10*time.Minute {
 				// 少于五分钟增大step
-				if g.curStep == 0 {
-					g.curStep = seg.Step
-				}
-				step := g.curStep * 2
+				step := seg.Step * 2
 				if step > 1000000 {
 					step = 1000000
 				}
@@ -80,6 +78,8 @@ func (g *generator) buildOneSegment(seg *Segment) {
 					step = seg.Step
 				}
 				g.curStep = step
+			} else {
+				g.curStep = seg.Step
 			}
 			g.svc.notifyUpdate(g.biztag, g.curStep, g.waits)
 			g.lastUpdate = time.Now()
@@ -88,6 +88,10 @@ func (g *generator) buildOneSegment(seg *Segment) {
 		case <-g.closeC: // FIXME:
 			return
 		case g.next <- i:
+		}
+		g.total++
+		if g.total%1000000 == 0 {
+			g.svc.logger.Infow("Generated", "biztag", g.biztag, "curid", i, "total", g.total)
 		}
 	}
 }
