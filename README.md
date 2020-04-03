@@ -2,8 +2,6 @@
 
 基于Go的分布式ID生成服务, 具体设计来自于[leaf美团分布式ID生成服务](https://tech.meituan.com/2017/04/21/mt-leaf.html)，参考美团点评开源的Java实现[Leaf](https://github.com/Meituan-Dianping/Leaf)。
 
-**当前仅测试用途，请勿用于生产环境。**
-
 ## 基本API
 > count 参数可以批量获取ID
 1. Segment
